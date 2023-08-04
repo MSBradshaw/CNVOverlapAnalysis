@@ -39,8 +39,16 @@ rule all:
         expand('work/CallerSpecificOverlapsBed/venn.{cnv_type}.{caller}.bed.txt',cnv_type=CNV_TYPES, caller=CALLERS),
         expand('work/CallerSpecificOverTripleOverlap/venn.{cnv_type}.triple.bed.txt',cnv_type=CNV_TYPES),
         expand('work/VenDiagramResults/overlap_numbers.{cnv_type}.txt',cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES),
+
+        
         # --------------------- Ven Diagrams BedPE ---------------------
-        expand('work/CallerSpecificOverlapsBedPE/venn.{cnv_type}.{caller}.bed.txt',cnv_type=CNV_TYPES, caller=CALLERS),
+        # expand('work/CallerSpecificOverlapsBedPE/venn.{cnv_type}.{caller}.bedpe.txt',cnv_type=CNV_TYPES, caller=CALLERS),
+        expand('work/CallerSpecificTripleOverlapBedPE/venn.{cnv_type}.triple.bedpe.txt',cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.txt',cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.txt',cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES),
         
 
 # split cnv_calls by DEL and DUP
@@ -444,7 +452,8 @@ rule report_overlap_numbers:
         double=expand('work/CallerSpecificOverlapsBed/venn.{cnv_type}.{caller}.bed.txt', caller=CALLERS, cnv_type='{cnv_type}'),
         single=expand('work/CallerSpecificCNVTypes/cnv_calls.{cnv_type}.{caller}.bed', caller=CALLERS, cnv_type='{cnv_type}')
     output:
-        'work/VenDiagramResults/overlap_numbers.{cnv_type}.txt'
+        non_specific='work/VenDiagramResults/overlap_numbers.{cnv_type}.txt',
+        sample_specific='work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.txt'
     shell:
         """
         mkdir -p work/VenDiagramResults
@@ -456,7 +465,17 @@ rule report_overlap_numbers:
             --cx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.CNVkit.bed.txt \
             --gx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.GATK.bed.txt \
             -t {input.triple} \
-            -o {output}
+            -o {output.non_specific}
+
+        # force calls to be from the same sample
+         python Scripts/count_overlaps.py -s work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bed \
+            -c work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bed \
+            -g work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.GATK.bed \
+            --sx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.Savvy.bed.txt \
+            --cx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.CNVkit.bed.txt \
+            --gx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.GATK.bed.txt \
+            -t {input.triple} \
+            -o {output.sample_specific} --fs
         """
 
 # ------------------------ BEDPE Ven Diagrams ------------------------ #
@@ -464,13 +483,13 @@ rule report_overlap_numbers:
 rule intersect_callers_bedpe:
     input:
         bedpe='work/CallerSpecificBedPECNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe',
-        all_bedpes=expand('work/CallerSpecificCNVTypes/cnv_calls.{cnv_type}.{caller}.bed', caller=CALLERS, cnv_type=CNV_TYPES)
+        all_bedpes=expand('work/CallerSpecificCNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe', caller=CALLERS, cnv_type=CNV_TYPES)
     params:
         savvy = 'Savvy',
         cnvkit = 'CNVkit',
         gatk = 'GATK'
     output:
-        'work/CallerSpecificOverlapsBedPE/venn.{cnv_type}.{caller}.bed.txt'
+        'work/CallerSpecificOverlapsBedPE/venn.{cnv_type}.{caller}.bedpe.txt'
     shell:
         """
         mkdir -p work/CallerSpecificOverlapsBedPE
@@ -508,4 +527,101 @@ rule intersect_callers_bedpe:
                 bedtools pairtopair -a work/CallerSpecificOverlapsBedPE/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe -b $STR -slop $slop >> {output}
             done < {input.bedpe}
         fi
+        """
+
+rule bedpe_triple_overlap:
+    input:
+        expand('work/CallerSpecificOverlapsBedPE/venn.{cnv_type}.{caller}.bedpe.txt', caller=CALLERS, cnv_type='{cnv_type}')
+    output:
+        'work/CallerSpecificTripleOverlapBedPE/venn.{cnv_type}.triple.bedpe.txt'
+    shell:
+        """
+        mkdir -p work/CallerSpecificTripleOverlapBedPE
+
+        python Scripts/triple_overlap.py -s work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.Savvy.bedpe.txt \
+                    -g work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
+                    -c work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt -p > {output}
+        """
+
+# report the number of single, double and triple overlaps
+rule report_overlap_numbers_bedpe:
+    input:
+        triple='work/CallerSpecificTripleOverlapBedPE/venn.{cnv_type}.triple.bedpe.txt',
+        double=expand('work/CallerSpecificOverlapsBedPE/venn.{cnv_type}.{caller}.bedpe.txt', caller=CALLERS, cnv_type='{cnv_type}'),
+        single=expand('work/CallerSpecificBedPECNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe', caller=CALLERS, cnv_type='{cnv_type}')
+    output:
+        non_specific='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.txt',
+        sample_specific='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.txt'
+    shell:
+        """
+        mkdir -p work/VenDiagramResultsBedPE
+        # number of calls in each caller
+        python Scripts/count_overlaps.py -s work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bedpe \
+            -c work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bedpe \
+            -g work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.GATK.bedpe \
+            --sx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.Savvy.bedpe.txt \
+            --cx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt \
+            --gx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
+            -t {input.triple} \
+            -o {output.non_specific} -p
+        
+        python Scripts/count_overlaps.py -s work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bedpe \
+            -c work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bedpe \
+            -g work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.GATK.bedpe \
+            --sx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.Savvy.bedpe.txt \
+            --cx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt \
+            --gx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
+            -t {input.triple} \
+            -o {output.sample_specific} --fs -p
+        """
+
+
+# ------------------------------ BED + BEDPE Overlaps Venn Diagrams ------------------------------ #
+
+rule report_all_bed_and_bedpe_overlap:
+    input:
+        bedpe_triple='work/CallerSpecificTripleOverlapBedPE/venn.{cnv_type}.triple.bedpe.txt',
+        bedpe_double=expand('work/CallerSpecificOverlapsBedPE/venn.{cnv_type}.{caller}.bedpe.txt', caller=CALLERS, cnv_type='{cnv_type}'),
+        triple='work/CallerSpecificOverTripleOverlap/venn.{cnv_type}.triple.bed.txt',
+        double=expand('work/CallerSpecificOverlapsBed/venn.{cnv_type}.{caller}.bed.txt', caller=CALLERS, cnv_type='{cnv_type}'),
+    output:
+        non_specific='work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.txt',
+        sample_specific='work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.sample_specific.txt',
+    shell:
+        """
+        mkdir -p work/VenDiagramResultsBoth
+        python Scripts/get_bed_bedpe_overlaps.py \
+            --sb work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.Savvy.bed.txt \
+            --sp work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.Savvy.bedpe.txt \
+            --cb work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.CNVkit.bed.txt \
+            --cp  work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt \
+            --gb work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.GATK.bed.txt \
+            --gp  work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
+            --tb {input.triple} \
+            --tp {input.bedpe_triple} \
+            --sx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.Savvy.bed.txt \
+            --cx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.CNVkit.bed.txt \
+            --gx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.GATK.bed.txt \
+            --tx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.triple.bed.txt
+        
+        # overlap again but force the samples to be the same
+        python Scripts/count_overlaps.py -s work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bed \
+            -c work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bed \
+            -g work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.GATK.bed \
+            --sx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.Savvy.bed.txt \
+            --cx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.CNVkit.bed.txt \
+            --gx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.GATK.bed.txt \
+            -t  work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.triple.bed.txt \
+            -o {output.non_specific}
+        
+        # overlap again but force the samples to be the same
+        python Scripts/count_overlaps.py -s work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bed \
+            -c work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bed \
+            -g work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.GATK.bed \
+            --sx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.Savvy.bed.txt \
+            --cx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.CNVkit.bed.txt \
+            --gx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.GATK.bed.txt \
+            -t  work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.triple.bed.txt \
+            -o {output.sample_specific} --fs
+
         """

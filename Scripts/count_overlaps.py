@@ -22,6 +22,9 @@ def parse_args():
     parser.add_argument('--gx', type=str, help='gatk-x overlap file')
     parser.add_argument('-t', type=str, help='triple overlap file')
     parser.add_argument('-o', type=str, help='output file')
+    # binary flag for p, if using bedpe files or not
+    parser.add_argument('-p', default=False, help='use bedpe files', action='store_true')
+    parser.add_argument('--fs', default=False, help='force calls to only count if they are from the same sample', action='store_true')
     return parser.parse_args()
 
 def load_single_file(file):
@@ -32,39 +35,45 @@ def load_single_file(file):
         calls.add(line)
     return calls
 
-def def_load_doubles_as_dict(file, alt_caller):
-    pairs = {}
-    for line in open(file,'r'):
-        if alt_caller not in line:
-            continue
-        call1 = '-'.join(line.strip().split('\t')[:6])
-        call2 = '-'.join(line.strip().split('\t')[6:-1])
-        if call1 not in pairs:
-            pairs[call1] = set()
-        pairs[call1].add(call2)
-        if call2 not in pairs:
-            pairs[call2] = set()
-        pairs[call2].add(call1)
-    return pairs
-
-def def_load_doubles_as_set(file, alt_caller):
+def def_load_doubles_as_set(file, alt_caller,use_bedpe=False, match_samples=False):
+    if use_bedpe:
+        idx = (None,13,None)
+    else:
+        idx = (None,6,-1)
     calls = set()
     for line in open(file,'r'):
         if alt_caller not in line:
             continue
-        call1 = '-'.join(line.strip().split('\t')[:6])
-        call2 = '-'.join(line.strip().split('\t')[6:-1])
+
+        row1 = line.strip().split('\t')[idx[0]:idx[1]]
+        row2 = line.strip().split('\t')[idx[1]:idx[2]]
+
+        if match_samples and row1[-2] != row2[-2]: 
+            continue
+        
+        call1 = '-'.join(row1)
+        call2 = '-'.join(row2)
+
         calls.add(call1)
         calls.add(call2)
     return calls
 
-def load_triple_file(file):
+def load_triple_file(file,use_bedpe=False, match_samples=False):
+    if use_bedpe:
+        idx = (None,13,26,None)
+    else:
+        idx = (None,6,12,None)
     calls = set()
     lines = 0
     for line in open(file,'r'):
-        call1 = '-'.join(line.strip().split('\t')[:6])
-        call2 = '-'.join(line.strip().split('\t')[6:12])
-        call3 = '-'.join(line.strip().split('\t')[12:])
+        row1 = line.strip().split('\t')[idx[0]:idx[1]]
+        row2 = line.strip().split('\t')[idx[1]:idx[2]]
+        row3 = line.strip().split('\t')[idx[2]:idx[3]]
+        if match_samples and (row1[-2] != row2[-2] or row1[-2] != row3[-2] or row2[-2] != row3[-2]):
+            continue
+        call1 = '-'.join(row1)
+        call2 = '-'.join(row2)
+        call3 = '-'.join(row3)
         calls.add(call1)
         calls.add(call2)
         calls.add(call3)
@@ -77,11 +86,11 @@ def main():
     cnvkit_calls = load_single_file(args.c)
     gatk_calls = load_single_file(args.g)
     
-    savvy_gatk = def_load_doubles_as_set(args.sx, 'GATK')
-    savvy_cnvkit = def_load_doubles_as_set(args.sx, 'CNVkit')
-    cnvkit_gatk = def_load_doubles_as_set(args.cx, 'GATK')
+    savvy_gatk = def_load_doubles_as_set(args.sx, 'GATK', args.p, args.fs)
+    savvy_cnvkit = def_load_doubles_as_set(args.sx, 'CNVkit', args.p, args.fs)
+    cnvkit_gatk = def_load_doubles_as_set(args.cx, 'GATK', args.p, args.fs)
 
-    triple_calls, triple_lines = load_triple_file(args.t)
+    triple_calls, triple_lines = load_triple_file(args.t, args.p, args.fs)
     print('Triple calls: ', len(triple_calls))
     print('Triple lines: ', triple_lines)
 
@@ -113,7 +122,7 @@ def main():
         f.write('Savvy-GATK: ' + str(len(just_savvy_gatk)) + '\n')
         f.write('Savvy-CNVKit: ' + str(len(just_savvy_cnvkit)) + '\n')
         f.write('CNVKit-GATK: ' + str(len(just_cnvkit_gatk)) + '\n')
-        f.write('Triple: ' + str(len(triple_calls)) + '\n')
+        f.write('Triple: ' + str(triple_lines) + '\n')
 
 
 if __name__ == '__main__':
