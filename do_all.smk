@@ -12,27 +12,30 @@ CALLERS = ['Savvy','CNVkit','GATK']
 
 rule all:
     input:
-        # expand('work/CNVTypes/cnv_calls.{cnv_type}.bed', cnv_type=CNV_TYPES),
-        # expand('work/CNVTypes/svs_calls.{cnv_type}.bed', cnv_type=CNV_TYPES),
-        # expand('work/CNVTypes/cnv_calls.{cnv_type}.bed.gz', cnv_type=CNV_TYPES),
-        # expand('work/CNVTypes/cnv_calls.{cnv_type}.bed.gz.tbi', cnv_type=CNV_TYPES),
-        # expand('work/CNVTypes/svs_calls.{cnv_type}.bed.gz', cnv_type=CNV_TYPES),
-        # expand('work/CNVTypes/svs_calls.{cnv_type}.bed.gz.tbi', cnv_type=CNV_TYPES),
-        # expand('work/Recip/reciprocal_overlap.{percent}.{cnv_type}.txt', percent=PERCENTS, cnv_type=CNV_TYPES),
-        # expand('work/SPLITS/cnv_split_{split}.{cnv_type}.bed.gz', split=SPLITS, cnv_type=CNV_TYPES),
-        # expand('work/SPLITS/cnv_split_{split}.{cnv_type}.bed', split=SPLITS, cnv_type=CNV_TYPES),
-        # expand('work/PercentSplits/call_level_reciprocal_overlap.{percent}.{split}.{cnv_type}.txt', split=SPLITS, percent=PERCENTS, cnv_type=CNV_TYPES),
-        # expand('work/PercentSplits/agg_call_level_reciprocal_overlap.{percent}.{cnv_type}.txt', percent=PERCENTS, cnv_type=CNV_TYPES),
-        # 'Figures/reciprocal_overlap_4_panel.png',
-        #--------------------- BedPE Outputs ---------------------
-        # expand('work/BedPEOverlap/cnv_calls.{cnv_type}.0p{percent}.bedpe.overlap.txt', percent=bedpePercents, cnv_type=CNV_TYPES),
-        # expand('work/BedPESPLITS/cnv_split_{split}.{cnv_type}.bedpe', split=SPLITS, cnv_type=CNV_TYPES),
-        # expand('work/BedPEPercentSplits/call_level_reciprocal_overlap.0p{percent}.{split}.{cnv_type}.txt', split=SPLITS, percent=bedpePercents, cnv_type=CNV_TYPES),
-        # 'Figures/breakpoint_bedpe_overlap_4_panel.png'
+        expand('work/CNVTypes/cnv_calls.{cnv_type}.bed', cnv_type=CNV_TYPES),
+        expand('work/CNVTypes/svs_calls.{cnv_type}.bed', cnv_type=CNV_TYPES),
+        expand('work/CNVTypes/cnv_calls.{cnv_type}.bed.gz', cnv_type=CNV_TYPES),
+        expand('work/CNVTypes/cnv_calls.{cnv_type}.bed.gz.tbi', cnv_type=CNV_TYPES),
+        expand('work/CNVTypes/svs_calls.{cnv_type}.bed.gz', cnv_type=CNV_TYPES),
+        expand('work/CNVTypes/svs_calls.{cnv_type}.bed.gz.tbi', cnv_type=CNV_TYPES),
+        expand('work/Recip/reciprocal_overlap.{percent}.{cnv_type}.txt', percent=PERCENTS, cnv_type=CNV_TYPES),
+        expand('work/SPLITS/cnv_split_{split}.{cnv_type}.bed.gz', split=SPLITS, cnv_type=CNV_TYPES),
+        expand('work/SPLITS/cnv_split_{split}.{cnv_type}.bed', split=SPLITS, cnv_type=CNV_TYPES),
+        expand('work/PercentSplits/call_level_reciprocal_overlap.{percent}.{split}.{cnv_type}.txt', split=SPLITS, percent=PERCENTS, cnv_type=CNV_TYPES),
+        expand('work/PercentSplits/agg_call_level_reciprocal_overlap.{percent}.{cnv_type}.txt', percent=PERCENTS, cnv_type=CNV_TYPES),
+        'Figures/reciprocal_overlap_4_panel.png',
+
+        # --------------------- BedPE Outputs ---------------------
+        expand('work/BedPEOverlap/cnv_calls.{cnv_type}.0p{percent}.bedpe.overlap.txt', percent=bedpePercents, cnv_type=CNV_TYPES),
+        expand('work/BedPESPLITS/cnv_split_{split}.{cnv_type}.bedpe', split=SPLITS, cnv_type=CNV_TYPES),
+        expand('work/BedPEPercentSplits/call_level_reciprocal_overlap.0p{percent}.{split}.{cnv_type}.txt', split=SPLITS, percent=bedpePercents, cnv_type=CNV_TYPES),
+        'Figures/breakpoint_bedpe_overlap_4_panel.png',
+
         # --------------------- SLOP Outputs ---------------------
         expand('work/BedPESlopPercentSplits/call_level_slop_breakpoint_overlap.0p{percent}.{split}.{cnv_type}.txt', split=SPLITS, percent=bedpePercents, cnv_type=CNV_TYPES),
         'work/BedPESlopPercentSplits/agg_call_level_slop_breakpoint_overlap.all.txt',
         'Figures/slop_breakpoint_bedpe_overlap_2_panel.png',
+
         # --------------------- Ven Diagrams Bed ---------------------
         expand('work/CallerSpecificCNVTypes/cnv_calls.{cnv_type}.{caller}.bed',cnv_type=CNV_TYPES, caller=CALLERS),
         expand('work/CallerSpecificBedPECNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe',cnv_type=CNV_TYPES, caller=CALLERS),
@@ -40,6 +43,7 @@ rule all:
         expand('work/CallerSpecificOverTripleOverlap/venn.{cnv_type}.triple.bed.txt',cnv_type=CNV_TYPES),
         expand('work/VenDiagramResults/overlap_numbers.{cnv_type}.txt',cnv_type=CNV_TYPES),
         expand('work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResults/overlapping_calls.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES),
 
         
         # --------------------- Ven Diagrams BedPE ---------------------
@@ -49,6 +53,16 @@ rule all:
         expand('work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES),
         expand('work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.txt',cnv_type=CNV_TYPES),
         expand('work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES),
+
+        # --------------------- Triple calls ---------------------
+        expand('work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.sample_specific.triples.bed.txt', cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt', cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt', cnv_type=CNV_TYPES),
+        'work/AllSampleSpecificTripleCalls/venn.bed_and_bedpe.all.sample_specific.triples.bed.txt',
+
+        # --------------------- CNV validation with SVs ---------------------
+        expand('work/SV_Validation/real_calls.{cnv_type}.bed',cnv_type=CNV_TYPES),
+        expand('work/SV_Validation/real_calls.{cnv_type}.report.txt',cnv_type=CNV_TYPES)
         
 
 # split cnv_calls by DEL and DUP
@@ -413,21 +427,21 @@ rule intersect_callers_bed:
         STR='work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bed'
         SUB='{wildcards.caller}'
         if [[ "$STR" != *"$SUB"* ]]; then
-            bedtools intersect -a {input.bed} -b $STR -wo -f 0.01 -r >> {output}
+            bedtools intersect -a {input.bed} -b $STR -wo -f 0.60 -r >> {output}
         fi
         
         # ---- cnvkit ---- #
         STR='work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bed'
         SUB='{wildcards.caller}'
         if [[ "$STR" != *"$SUB"* ]]; then
-            bedtools intersect -a {input.bed} -b $STR -wo -f 0.01 -r >> {output}
+            bedtools intersect -a {input.bed} -b $STR -wo -f 0.60 -r >> {output}
         fi
 
         # ---- gatk ---- #
         STR='work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.GATK.bed'
         SUB='{wildcards.caller}'
         if [[ "$STR" != *"$SUB"* ]]; then
-            bedtools intersect -a {input.bed} -b $STR -wo -f 0.01 -r >> {output}
+            bedtools intersect -a {input.bed} -b $STR -wo -f 0.60 -r >> {output}
         fi
         """
 
@@ -453,7 +467,9 @@ rule report_overlap_numbers:
         single=expand('work/CallerSpecificCNVTypes/cnv_calls.{cnv_type}.{caller}.bed', caller=CALLERS, cnv_type='{cnv_type}')
     output:
         non_specific='work/VenDiagramResults/overlap_numbers.{cnv_type}.txt',
-        sample_specific='work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.txt'
+        sample_specific='work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.txt',
+        sample_specific_triples='work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',
+        sample_specific_triple_calls='work/VenDiagramResults/overlapping_calls.{cnv_type}.sample_specific.triples.bed.txt'
     shell:
         """
         mkdir -p work/VenDiagramResults
@@ -475,7 +491,9 @@ rule report_overlap_numbers:
             --cx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.CNVkit.bed.txt \
             --gx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.GATK.bed.txt \
             -t {input.triple} \
-            -o {output.sample_specific} --fs
+            -o {output.sample_specific} --fs --to {output.sample_specific_triples} \
+            --sample_specific_triples_out {output.sample_specific_triple_calls}
+
         """
 
 # ------------------------ BEDPE Ven Diagrams ------------------------ #
@@ -483,7 +501,7 @@ rule report_overlap_numbers:
 rule intersect_callers_bedpe:
     input:
         bedpe='work/CallerSpecificBedPECNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe',
-        all_bedpes=expand('work/CallerSpecificCNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe', caller=CALLERS, cnv_type=CNV_TYPES)
+        all_bedpes=expand('work/CallerSpecificBedPECNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe', caller=CALLERS, cnv_type=CNV_TYPES)
     params:
         savvy = 'Savvy',
         cnvkit = 'CNVkit',
@@ -551,7 +569,8 @@ rule report_overlap_numbers_bedpe:
         single=expand('work/CallerSpecificBedPECNVTypes/cnv_calls.{cnv_type}.{caller}.bedpe', caller=CALLERS, cnv_type='{cnv_type}')
     output:
         non_specific='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.txt',
-        sample_specific='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.txt'
+        sample_specific='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.txt',
+        sample_specific_triples='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt'
     shell:
         """
         mkdir -p work/VenDiagramResultsBedPE
@@ -572,7 +591,7 @@ rule report_overlap_numbers_bedpe:
             --cx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt \
             --gx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
             -t {input.triple} \
-            -o {output.sample_specific} --fs -p
+            -o {output.sample_specific} --fs -p --to {output.sample_specific_triples}
         """
 
 
@@ -587,6 +606,7 @@ rule report_all_bed_and_bedpe_overlap:
     output:
         non_specific='work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.txt',
         sample_specific='work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.sample_specific.txt',
+        sample_specific_triples='work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.sample_specific.triples.bed.txt',
     shell:
         """
         mkdir -p work/VenDiagramResultsBoth
@@ -622,6 +642,56 @@ rule report_all_bed_and_bedpe_overlap:
             --cx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.CNVkit.bed.txt \
             --gx work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.GATK.bed.txt \
             -t  work/VenDiagramResultsBoth/tmp.{wildcards.cnv_type}.triple.bed.txt \
-            -o {output.sample_specific} --fs
+            -o {output.sample_specific} --fs --to {output.sample_specific_triples}
 
         """
+
+rule merge_all_triple_calls:
+    input:
+        expand('work/VenDiagramResultsBoth/venn.bed_and_bedpe.{cnv_type}.sample_specific.triples.bed.txt', cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt', cnv_type=CNV_TYPES),
+        expand('work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt', cnv_type=CNV_TYPES)
+    output:
+        'work/AllSampleSpecificTripleCalls/venn.bed_and_bedpe.all.sample_specific.triples.bed.txt'
+    shell:
+        """
+        cat {input}  | sort | uniq > {output}
+        """
+
+rule find_real_calls:
+    input:
+        svs='work/CNVTypes/svs_calls.{cnv_type}.bed.gz',
+        cnvs='work/CNVTypes/cnv_calls.{cnv_type}.bed.gz'
+    output:
+        bed='work/SV_Validation/real_calls.{cnv_type}.bed',
+        txt='work/SV_Validation/real_calls.{cnv_type}.report.txt'
+    shell:
+        """
+        mkdir -p work/SV_Validation
+        # this requires the SV to overlap 90% of the CNV
+        bedtools intersect -a {input.svs} -b {input.cnvs} -wb -F .9 > {output.bed}
+
+        # count the number of GATK calls in CNVs
+        echo 'GATK' > {output.txt}
+        echo -n 'CNVs: ' >> {output.txt}
+        zcat {input.cnvs} | grep GATK | wc -l >> {output.txt}
+        echo -n 'Validated with SV: ' >> {output.txt}
+        zcat {output.bed} | grep GATK | wc -l >> {output.txt}
+
+        # count the number of CNVkit calls in CNVs
+        echo 'CNVkit' >> {output.txt}
+        echo -n 'CNVs: ' >> {output.txt}
+        zcat {input.cnvs} | grep CNVkit | wc -l >> {output.txt}
+        echo -n 'Validated with SV: ' >> {output.txt}
+        zcat {output.bed} | grep CNVkit | wc -l >> {output.txt}
+
+        # count the number of Savvy calls in CNVs
+        echo 'Savvy' >> {output.txt}
+        echo -n 'CNVs: ' >> {output.txt}
+        zcat {input.cnvs} | grep Savvy | wc -l >> {output.txt}
+        echo -n 'Validated with SV: ' >> {output.txt}
+        zcat {output.bed} | grep Savvy | wc -l >> {output.txt}
+        """
+
+
+    
