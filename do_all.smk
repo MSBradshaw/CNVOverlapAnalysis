@@ -62,7 +62,14 @@ rule all:
 
         # --------------------- CNV validation with SVs ---------------------
         expand('work/SV_Validation/real_calls.{cnv_type}.bed',cnv_type=CNV_TYPES),
-        expand('work/SV_Validation/real_calls.{cnv_type}.report.txt',cnv_type=CNV_TYPES)
+        expand('work/SV_Validation/real_calls.{cnv_type}.report.txt',cnv_type=CNV_TYPES),
+        expand('work/SV_Validation_Intersection/venn.{cnv_type}.{caller}.bed.txt',cnv_type=CNV_TYPES, caller=CALLERS),
+        # expand('work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.txt',cnv_type=CNV_TYPES, caller=CALLERS),
+        expand('work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES, caller=CALLERS),
+        expand('work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES, caller=CALLERS),
+        expand('work/SV_Validation_VenDiagram_Results/overlapping_calls.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES),
+        # --------------------- CNV validation with SVs and breakpoint overlap ---------------------
+        expand('work/SV_Validation_Calls_Bedpe_Ven_Diagram/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES)
         
 
 # split cnv_calls by DEL and DUP
@@ -83,6 +90,10 @@ rule split_cnv_calls:
         # sort the cnv calls
         bedtools sort -i {output[0]}.tmp > {output[0]}
         bedtools sort -i {output[1]}.tmp > {output[1]}
+        # remove prefix chr from chromosome names in {output[1]}
+        cat {output[1]} | sed -e "s/^chr//" > {output[1]}.tmp
+        cat {output[1]}.tmp | sed -e "s/GATK Cohort Mode/1KG_SV/" > {output[1]}
+        mv {output[1]}.tmp {output[1]}
         """
 
 rule sort_bgzip_tabix:
@@ -669,29 +680,231 @@ rule find_real_calls:
         """
         mkdir -p work/SV_Validation
         # this requires the SV to overlap 90% of the CNV
-        bedtools intersect -a {input.svs} -b {input.cnvs} -wb -F .9 > {output.bed}
+        bedtools intersect -b {input.svs} -a {input.cnvs} -wa -f .9 > {output.bed}.tmp
+
+        cat {output.bed}.tmp | sort | uniq > {output.bed}
 
         # count the number of GATK calls in CNVs
         echo 'GATK' > {output.txt}
         echo -n 'CNVs: ' >> {output.txt}
         zcat {input.cnvs} | grep GATK | wc -l >> {output.txt}
         echo -n 'Validated with SV: ' >> {output.txt}
-        zcat {output.bed} | grep GATK | wc -l >> {output.txt}
+        cat {output.bed} | grep GATK | wc -l >> {output.txt}
 
         # count the number of CNVkit calls in CNVs
         echo 'CNVkit' >> {output.txt}
         echo -n 'CNVs: ' >> {output.txt}
         zcat {input.cnvs} | grep CNVkit | wc -l >> {output.txt}
         echo -n 'Validated with SV: ' >> {output.txt}
-        zcat {output.bed} | grep CNVkit | wc -l >> {output.txt}
+        cat {output.bed} | grep CNVkit | wc -l >> {output.txt}
 
         # count the number of Savvy calls in CNVs
         echo 'Savvy' >> {output.txt}
         echo -n 'CNVs: ' >> {output.txt}
         zcat {input.cnvs} | grep Savvy | wc -l >> {output.txt}
         echo -n 'Validated with SV: ' >> {output.txt}
-        zcat {output.bed} | grep Savvy | wc -l >> {output.txt}
+        cat {output.bed} | grep Savvy | wc -l >> {output.txt}
         """
 
+# split cnv_calls by DEL and DUP
+rule split_real_calls_by_caller:
+    input:
+        cnv_calls='work/SV_Validation/real_calls.{cnv_type}.bed'
+    output:
+        'work/SV_Validation_Calls/cnv_calls.{cnv_type}.CNVkit.bed',
+        'work/SV_Validation_Calls/cnv_calls.{cnv_type}.Savvy.bed',
+        'work/SV_Validation_Calls/cnv_calls.{cnv_type}.GATK.bed',
+    shell:
+        """
+        mkdir -p SV_Validation_Calls
 
+        grep "CNVkit" {input.cnv_calls} > {output[0]}.tmp
+        # sort the cnv calls
+        bedtools sort -i {output[0]}.tmp > {output[0]}
+
+        grep "Savvy" {input.cnv_calls} > {output[1]}.tmp
+        # sort the cnv calls
+        bedtools sort -i {output[1]}.tmp > {output[1]}
+
+        grep "GATK" {input.cnv_calls} > {output[2]}.tmp
+        # sort the cnv calls
+        bedtools sort -i {output[2]}.tmp > {output[2]}
+
+        """
     
+rule intersect_real_calls:
+    input:
+        bed='work/SV_Validation_Calls/cnv_calls.{cnv_type}.{caller}.bed',
+        cnv_calls=expand('work/SV_Validation_Calls/cnv_calls.{cnv_type}.{caller}.bed', caller=CALLERS, cnv_type='{cnv_type}')
+    output:
+        'work/SV_Validation_Intersection/venn.{cnv_type}.{caller}.bed.txt'
+    shell:
+        """
+        mkdir -p work/SV_Validation_Intersection
+        rm -f {output}
+        
+        # ---- savvy ---- #
+        STR='work/SV_Validation_Calls/cnv_calls.{wildcards.cnv_type}.Savvy.bed'
+        SUB='{wildcards.caller}'
+        if [[ "$STR" != *"$SUB"* ]]; then
+            bedtools intersect -a {input.bed} -b $STR -wo -f 0.60 -r >> {output}
+        fi
+        
+        # ---- cnvkit ---- #
+        STR='work/SV_Validation_Calls/cnv_calls.{wildcards.cnv_type}.CNVkit.bed'
+        SUB='{wildcards.caller}'
+        if [[ "$STR" != *"$SUB"* ]]; then
+            bedtools intersect -a {input.bed} -b $STR -wo -f 0.60 -r >> {output}
+        fi
+
+        # ---- gatk ---- #
+        STR='work/SV_Validation_Calls/cnv_calls.{wildcards.cnv_type}.GATK.bed'
+        SUB='{wildcards.caller}'
+        if [[ "$STR" != *"$SUB"* ]]; then
+            bedtools intersect -a {input.bed} -b $STR -wo -f 0.60 -r >> {output}
+        fi
+
+        """
+
+# find the triple overlaps
+rule triple_overlap_bed_real_calls:
+    input:
+        expand('work/SV_Validation_Intersection/venn.{cnv_type}.{caller}.bed.txt', caller=CALLERS, cnv_type='{cnv_type}')
+    output:
+        'work/SV_Validation_Intersection_Triple/venn.{cnv_type}.triple.bed.txt'
+    shell:
+        """
+        mkdir -p work/SV_Validation_Intersection_Triple
+        python Scripts/triple_overlap.py -s work/SV_Validation_Intersection/venn.{wildcards.cnv_type}.Savvy.bed.txt \
+                -g work/SV_Validation_Intersection/venn.{wildcards.cnv_type}.GATK.bed.txt \
+                -c work/SV_Validation_Intersection/venn.{wildcards.cnv_type}.CNVkit.bed.txt > {output}
+        """
+
+# report the number of single, double and triple overlaps
+rule report_ol_real_cnvs:
+    input:
+        triple='work/SV_Validation_Intersection_Triple/venn.{cnv_type}.triple.bed.txt',
+        double=expand('work/SV_Validation_Intersection/venn.{cnv_type}.{caller}.bed.txt', caller=CALLERS, cnv_type='{cnv_type}'),
+        single=expand('work/SV_Validation_Calls/cnv_calls.{cnv_type}.{caller}.bed', caller=CALLERS, cnv_type='{cnv_type}')
+    output:
+        # non_specific='work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.txt',
+        sample_specific='work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.sample_specific.txt',
+        sample_specific_triples='work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',
+        sample_specific_triple_calls='work/SV_Validation_VenDiagram_Results/overlapping_calls.{cnv_type}.sample_specific.triples.bed.txt'
+    shell:
+        """
+        mkdir -p work/SV_Validation_VenDiagram_Results
+        # number of calls in each caller
+        # force calls to be from the same sample
+        python Scripts/count_overlaps.py -s work/SV_Validation_Calls/cnv_calls.{wildcards.cnv_type}.Savvy.bed \
+            -c work/SV_Validation_Calls/cnv_calls.{wildcards.cnv_type}.CNVkit.bed \
+            -g work/SV_Validation_Calls/cnv_calls.{wildcards.cnv_type}.GATK.bed \
+            --sx work/SV_Validation_Intersection/venn.{wildcards.cnv_type}.Savvy.bed.txt \
+            --cx work/SV_Validation_Intersection/venn.{wildcards.cnv_type}.CNVkit.bed.txt \
+            --gx work/SV_Validation_Intersection/venn.{wildcards.cnv_type}.GATK.bed.txt \
+            -t {input.triple} \
+            -o {output.sample_specific} --fs --to {output.sample_specific_triples} \
+            --sample_specific_triples_out {output.sample_specific_triple_calls}
+
+        """
+
+# real CNVs validated by SVs but with breakpoint overlap
+
+rule convert_to_bedpe_real_calls:
+    input:
+        cnv='work/SV_Validation_Calls/cnv_calls.{cnv_type}.{caller}.bed'
+    output:
+        cnv='work/SV_Validation_Calls_Bedpe/cnv_calls.{cnv_type}.{caller}.bedpe'
+    shell:
+        """
+        mkdir -p work/SV_Validation_Calls_Bedpe
+        # columns for bedpe
+        # chrom1 start1 end1 chrom2 start2 end2 name score strand1 strand2 extras...
+        # make sure strand 1 and 2 are filled in with .
+        cat {input.cnv} | awk '{{print $1"\t"$2-1"\t"$2+1"\t"$1"\t"$3-1"\t"$3+1"\t.\t.\t.\t.\t"$4"\t"$5"\t"$6"\t"}}' > {output.cnv}
+        """
+
+rule intersect_callers_bedpe_real_calls:
+    input:
+        bedpe='work/SV_Validation_Calls_Bedpe/cnv_calls.{cnv_type}.{caller}.bedpe',
+        all_bedpes=expand('work/SV_Validation_Calls_Bedpe/cnv_calls.{cnv_type}.{caller}.bedpe', caller=CALLERS, cnv_type=CNV_TYPES)
+    params:
+        savvy = 'Savvy',
+        cnvkit = 'CNVkit',
+        gatk = 'GATK'
+    output:
+        'work/SV_Validation_Calls_Bedpe_Overlaps/venn.{cnv_type}.{caller}.bedpe.txt'
+    shell:
+        """
+        mkdir -p work/SV_Validation_Calls_Bedpe_Overlaps
+        rm -f {output}
+
+        # ---- savvy ---- #
+        STR='work/SV_Validation_Calls_Bedpe/cnv_calls.{wildcards.cnv_type}.Savvy.bedpe'
+        SUB='{wildcards.caller}'
+        if [[ "$STR" != *"$SUB"* ]]; then
+            while IFS= read -r line; do
+                echo "$line" > work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe
+                slop=$(python Scripts/get_slop_from_percent.py work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe 0.50)
+                bedtools pairtopair -a work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe -b $STR -slop $slop >> {output}
+            done < {input.bedpe}
+        fi
+        
+        # ---- cnvkit ---- #
+        STR='work/SV_Validation_Calls_Bedpe/cnv_calls.{wildcards.cnv_type}.CNVkit.bedpe'
+        SUB='{wildcards.caller}'
+        if [[ "$STR" != *"$SUB"* ]]; then
+            while IFS= read -r line; do
+                echo "$line" > work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe
+                slop=$(python Scripts/get_slop_from_percent.py work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe 0.50)
+                bedtools pairtopair -a work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe -b $STR -slop $slop >> {output}
+            done < {input.bedpe}
+        fi
+
+        # ---- gatk ---- #
+        STR='work/SV_Validation_Calls_Bedpe/cnv_calls.{wildcards.cnv_type}.GATK.bedpe'
+        SUB='{wildcards.caller}'
+        if [[ "$STR" != *"$SUB"* ]]; then
+            while IFS= read -r line; do
+                echo "$line" > work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe
+                slop=$(python Scripts/get_slop_from_percent.py work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe 0.50)
+                bedtools pairtopair -a work/SV_Validation_Calls_Bedpe/tmp.{wildcards.cnv_type}.{wildcards.caller}.bedpe -b $STR -slop $slop >> {output}
+            done < {input.bedpe}
+        fi
+        """
+rule bedpe_triple_overlap_real_calls:
+    input:
+        expand('work/SV_Validation_Calls_Bedpe_Overlaps/venn.{cnv_type}.{caller}.bedpe.txt', caller=CALLERS, cnv_type='{cnv_type}')
+    output:
+        'work/SV_Validation_Calls_Bedpe_Overlaps_Triple/venn.{cnv_type}.triple.bedpe.txt'
+    shell:
+        """
+        mkdir -p work/SV_Validation_Calls_Bedpe_Overlaps_Triple
+
+        python Scripts/triple_overlap.py -s work/SV_Validation_Calls_Bedpe_Overlaps/venn.{wildcards.cnv_type}.Savvy.bedpe.txt \
+                    -g work/SV_Validation_Calls_Bedpe_Overlaps/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
+                    -c work/SV_Validation_Calls_Bedpe_Overlaps/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt -p > {output}
+        """
+
+# report the number of single, double and triple overlaps
+rule report_overlap_numbers_bedpe_real_calls:
+    input:
+        triple='work/SV_Validation_Calls_Bedpe_Overlaps_Triple/venn.{cnv_type}.triple.bedpe.txt',
+        double=expand('work/SV_Validation_Calls_Bedpe_Overlaps/venn.{cnv_type}.{caller}.bedpe.txt', caller=CALLERS, cnv_type='{cnv_type}'),
+        single=expand('work/SV_Validation_Calls_Bedpe/cnv_calls.{cnv_type}.{caller}.bedpe', caller=CALLERS, cnv_type='{cnv_type}')
+    output:
+        specific='work/SV_Validation_Calls_Bedpe_Ven_Diagram/overlap_numbers.{cnv_type}.txt',
+        sample_specific_triples='work/SV_Validation_Calls_Bedpe_Ven_Diagram/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt'
+    shell:
+        """
+        mkdir -p work/SV_Validation_Calls_Bedpe_Ven_Diagram
+        # number of calls in each caller
+        python Scripts/count_overlaps.py -s work/SV_Validation_Calls_Bedpe/cnv_calls.{wildcards.cnv_type}.Savvy.bedpe \
+            -c work/SV_Validation_Calls_Bedpe/cnv_calls.{wildcards.cnv_type}.CNVkit.bedpe \
+            -g work/SV_Validation_Calls_Bedpe/cnv_calls.{wildcards.cnv_type}.GATK.bedpe \
+            --sx work/SV_Validation_Calls_Bedpe_Overlaps/venn.{wildcards.cnv_type}.Savvy.bedpe.txt \
+            --cx work/SV_Validation_Calls_Bedpe_Overlaps/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt \
+            --gx work/SV_Validation_Calls_Bedpe_Overlaps/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
+            -t {input.triple} \
+            -o {output.specific} --fs -p --to {output.sample_specific_triples}
+        """
