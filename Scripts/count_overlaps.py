@@ -22,16 +22,19 @@ def parse_args():
     parser.add_argument('--gx', type=str, help='gatk-x overlap file')
     parser.add_argument('-t', type=str, help='triple overlap file')
     parser.add_argument('-o', type=str, help='output file')
+    parser.add_argument('--to', type=str, help='triple overlap output', default=None)
+    parser.add_argument('--sample_specific_triples_out', type=str, help='output files to store all triples that relate only to the same sample', default=None)
     # binary flag for p, if using bedpe files or not
     parser.add_argument('-p', default=False, help='use bedpe files', action='store_true')
     parser.add_argument('--fs', default=False, help='force calls to only count if they are from the same sample', action='store_true')
+    parser.add_argument('--prefix', default=None, help='prefix to use to save bed files of calls by each category in')
     return parser.parse_args()
 
 def load_single_file(file):
     calls = set()
     for line in open(file,'r'):
         line = line.strip()
-        line.replace('\t','-')
+        line = line.replace('\t','-')
         calls.add(line)
     return calls
 
@@ -65,6 +68,7 @@ def load_triple_file(file,use_bedpe=False, match_samples=False):
         idx = (None,6,12,None)
     calls = set()
     lines = 0
+    all_calls_as_triples = []
     for line in open(file,'r'):
         row1 = line.strip().split('\t')[idx[0]:idx[1]]
         row2 = line.strip().split('\t')[idx[1]:idx[2]]
@@ -77,8 +81,17 @@ def load_triple_file(file,use_bedpe=False, match_samples=False):
         calls.add(call1)
         calls.add(call2)
         calls.add(call3)
+        all_calls_as_triples.append(line.strip())
         lines += 1
-    return calls, lines
+    return calls, lines, all_calls_as_triples
+
+def write_calls_to_file(calls, file):
+    # '17-18344000-18458000-DEL-NA20770-Savvy'
+    with open(file,'w') as f:
+        for call in calls:
+            call = call.replace('-','\t')
+            f.write(call + '\n')
+    
 
 def main():
     args = parse_args()
@@ -90,13 +103,17 @@ def main():
     savvy_cnvkit = def_load_doubles_as_set(args.sx, 'CNVkit', args.p, args.fs)
     cnvkit_gatk = def_load_doubles_as_set(args.cx, 'GATK', args.p, args.fs)
 
-    triple_calls, triple_lines = load_triple_file(args.t, args.p, args.fs)
+    triple_calls, triple_lines, all_calls_as_triples = load_triple_file(args.t, args.p, args.fs)
     print('Triple calls: ', len(triple_calls))
     print('Triple lines: ', triple_lines)
 
+    print('OG savvy', len(savvy_calls))
+    print(list(savvy_calls)[:10])
+    print(list(savvy_gatk)[:10])
     just_single_savvy = savvy_calls.difference(savvy_gatk).difference(savvy_cnvkit)
     just_single_cnvkit = cnvkit_calls.difference(cnvkit_gatk).difference(savvy_cnvkit)
     just_single_gatk = gatk_calls.difference(savvy_gatk).difference(cnvkit_gatk)
+    print('new savvy', len(just_single_savvy))
 
     just_single_savvy = just_single_savvy.difference(triple_calls)
     just_single_cnvkit = just_single_cnvkit.difference(triple_calls)
@@ -114,6 +131,16 @@ def main():
     print('CNVKit-GATK: ', len(just_cnvkit_gatk))
     print('Triple: ', len(triple_calls))
 
+    if args.prefix is not None:
+        write_calls_to_file(just_single_savvy, args.prefix + '-savvy.bed')
+        write_calls_to_file(just_single_cnvkit, args.prefix + '-cnvkit.bed')
+        write_calls_to_file(just_single_gatk, args.prefix + '-gatk.bed')
+        write_calls_to_file(just_savvy_gatk, args.prefix + '-savvy_gatk.bed')
+        write_calls_to_file(just_savvy_cnvkit, args.prefix + '-savvy_cnvkit.bed')
+        write_calls_to_file(just_cnvkit_gatk, args.prefix + '-cnvkit_gatk.bed')
+        write_calls_to_file(triple_calls, args.prefix + '-triple.bed')
+
+
     # write those print statements to a file
     with open(args.o,'w') as f:
         f.write('Savvy: ' + str(len(just_single_savvy)) + '\n')
@@ -123,7 +150,28 @@ def main():
         f.write('Savvy-CNVKit: ' + str(len(just_savvy_cnvkit)) + '\n')
         f.write('CNVKit-GATK: ' + str(len(just_cnvkit_gatk)) + '\n')
         f.write('Triple: ' + str(triple_lines) + '\n')
-
+    
+    if args.to:
+        if args.p:
+            with open(args.to,'w') as f:
+                for call in triple_calls:
+                    row = call.split('-')
+                    c = row[0]
+                    s = str(int(row[1]) + 1)
+                    e = str(int(row[4]) + 1)
+                    t = row[10]
+                    samp = row[11]
+                    caller = row[12]
+                    f.write(c + '\t' + s + '\t' + e + '\t' + t + '\t' + samp + '\t' + caller + '\n')
+        else:
+            with open(args.to,'w') as f:
+                for call in triple_calls:
+                    call = call.replace('-','\t')
+                    f.write(call + '\n')
+        if args.sample_specific_triples_out is not None:
+            with open(args.sample_specific_triples_out,'w') as f:
+                for line in all_calls_as_triples:
+                    f.write(line + '\n')
 
 if __name__ == '__main__':
     main()

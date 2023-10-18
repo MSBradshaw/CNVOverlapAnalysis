@@ -4,6 +4,7 @@ cnv_calls = 'Data/all_calls.bed'
 SV_calls = 'Data/all_SVs.bed'
 PERCENTS = ['0.10','0.15','0.20','0.25','0.30','0.35','0.40','0.45','0.50','0.55','0.60','0.65','0.70','0.75','0.80','0.85','0.90','0.95']
 bedpePercents = [str(i) for i in range(10,100,5)]
+ENDS=['savvy','cnvkit','gatk','triple','savvy_gatk','savvy_cnvkit','cnvkit_gatk']
 
 # list of numbers from 00 to 99
 SPLITS = list( str(i) if i > 9 else '0' + str(i) for i in range(100))
@@ -68,8 +69,24 @@ rule all:
         expand('work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.sample_specific.txt',cnv_type=CNV_TYPES, caller=CALLERS),
         expand('work/SV_Validation_VenDiagram_Results/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES, caller=CALLERS),
         expand('work/SV_Validation_VenDiagram_Results/overlapping_calls.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES),
+        
         # --------------------- CNV validation with SVs and breakpoint overlap ---------------------
-        expand('work/SV_Validation_Calls_Bedpe_Ven_Diagram/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES)
+        expand('work/SV_Validation_Calls_Bedpe_Ven_Diagram/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',cnv_type=CNV_TYPES),
+
+        # --------------------- Additional plotting ---------------------
+        'Figures/reciprocal_and_slop_breakpoint_boxplots.png',
+        'Figures/size_distribution.png',
+        expand('Figures/upsetplot.{cnv_type}.png',cnv_type=CNV_TYPES),
+        expand('Figures/upsetplot.slop.{cnv_type}.png',cnv_type=CNV_TYPES),
+        expand('work/RecipCategoriesBeds/{cnv_type}{end}.bed',cnv_type=CNV_TYPES,end=['_savvy','_cnvkit','_gatk','_triple','_savvy_gatk','_savvy_cnvkit','_cnvkit_gatk']),
+        expand('work/RecipCategoriesBedPEs/{cnv_type}{end}.bed',cnv_type=CNV_TYPES,end=['_savvy','_cnvkit','_gatk','_triple','_savvy_gatk','_savvy_cnvkit','_cnvkit_gatk']),
+        expand('work/ValidatedCallsByCategory/{cnv_type}-{end}.bed.txt',cnv_type=CNV_TYPES,end=ENDS),
+        expand('work/ValidatedCallsByCategoryBedPE/{cnv_type}-{end}.bed.txt',cnv_type=CNV_TYPES,end=ENDS),
+        'work/ValidatedCallsByCategoryStats/agg_stats.txt',
+        expand('work/ValidatedCallsByCategoryStats/for_upset_{ol_type}.{cnv_type}.txt',cnv_type=['DEL','DUP'],ol_type=['bed','bedpe']),
+        expand('Figures/upsetplot_sv_validation_{ol_type}.{cnv_type}.png',cnv_type=['DEL','DUP'],ol_type=['bed','bedpe']),
+        expand('work/ValidatedCallsByCategoryStats/tabulated_validation_percents_{ol_type}.{cnv_type}.tsv',cnv_type=['DEL','DUP'],ol_type=['bed','bedpe']),
+        expand('Figures/venn_diagram_{ol_type}.{cnv_type}.png',cnv_type=['DEL','DUP'],ol_type=['bed','bedpe'])
         
 
 # split cnv_calls by DEL and DUP
@@ -480,10 +497,12 @@ rule report_overlap_numbers:
         non_specific='work/VenDiagramResults/overlap_numbers.{cnv_type}.txt',
         sample_specific='work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.txt',
         sample_specific_triples='work/VenDiagramResults/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',
-        sample_specific_triple_calls='work/VenDiagramResults/overlapping_calls.{cnv_type}.sample_specific.triples.bed.txt'
+        sample_specific_triple_calls='work/VenDiagramResults/overlapping_calls.{cnv_type}.sample_specific.triples.bed.txt',
+        sample_specific_all_groupings=expand('work/RecipCategoriesBeds/{cnv_type}{end}.bed',cnv_type='{cnv_type}',end=['_savvy','_cnvkit','_gatk','_triple','_savvy_gatk','_savvy_cnvkit','_cnvkit_gatk'])
     shell:
         """
         mkdir -p work/VenDiagramResults
+        mkdir work/RecipCategoriesBeds
         # number of calls in each caller
         python Scripts/count_overlaps.py -s work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bed \
             -c work/CallerSpecificCNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bed \
@@ -503,7 +522,8 @@ rule report_overlap_numbers:
             --gx work/CallerSpecificOverlapsBed/venn.{wildcards.cnv_type}.GATK.bed.txt \
             -t {input.triple} \
             -o {output.sample_specific} --fs --to {output.sample_specific_triples} \
-            --sample_specific_triples_out {output.sample_specific_triple_calls}
+            --sample_specific_triples_out {output.sample_specific_triple_calls} \
+            --prefix work/RecipCategoriesBeds/{wildcards.cnv_type}
 
         """
 
@@ -581,10 +601,12 @@ rule report_overlap_numbers_bedpe:
     output:
         non_specific='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.txt',
         sample_specific='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.txt',
-        sample_specific_triples='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt'
+        sample_specific_triples='work/VenDiagramResultsBedPE/overlap_numbers.{cnv_type}.sample_specific.triples.bed.txt',
+        sample_specific_all_groupings=expand('work/RecipCategoriesBedPEs/{cnv_type}{end}.bed',cnv_type='{cnv_type}',end=['_savvy','_cnvkit','_gatk','_triple','_savvy_gatk','_savvy_cnvkit','_cnvkit_gatk'])
     shell:
         """
         mkdir -p work/VenDiagramResultsBedPE
+        mkdir -p work/RecipCategoriesBedPEs
         # number of calls in each caller
         python Scripts/count_overlaps.py -s work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.Savvy.bedpe \
             -c work/CallerSpecificBedPECNVTypes/cnv_calls.{wildcards.cnv_type}.CNVkit.bedpe \
@@ -602,7 +624,8 @@ rule report_overlap_numbers_bedpe:
             --cx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.CNVkit.bedpe.txt \
             --gx work/CallerSpecificOverlapsBedPE/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
             -t {input.triple} \
-            -o {output.sample_specific} --fs -p --to {output.sample_specific_triples}
+            -o {output.sample_specific} --fs -p --to {output.sample_specific_triples} \
+            --prefix work/RecipCategoriesBedPEs/{wildcards.cnv_type}
         """
 
 
@@ -907,4 +930,200 @@ rule report_overlap_numbers_bedpe_real_calls:
             --gx work/SV_Validation_Calls_Bedpe_Overlaps/venn.{wildcards.cnv_type}.GATK.bedpe.txt \
             -t {input.triple} \
             -o {output.specific} --fs -p --to {output.sample_specific_triples}
+        """
+
+# ------------------------------ Plot Reciprocal & Breakpoint ------------------------------ #
+
+# plot slop
+rule plot_slop_and_recipt:
+    input:
+        slop='work/BedPESlopPercentSplits/agg_call_level_slop_breakpoint_overlap.all.txt',
+        single_files_r = expand('work/AnnotatedPercentSplits/agg_call_level_reciprocal_overlap.{percent}.{cnv_type}.annotated.txt', percent=PERCENTS, cnv_type=CNV_TYPES),
+        all_by_all_files_r = expand('work/AnnotatedRecip/reciprocal_overlap.{percent}.{cnv_type}.annotated.txt', percent=PERCENTS, cnv_type=CNV_TYPES)
+    output:
+        'Figures/reciprocal_and_slop_breakpoint_boxplots.png'
+    shell:
+        """
+        mkdir -p Figures/
+        # aggregate files for reciprocal overlap
+        cat {input.single_files_r} > work/agg_call_level_reciprocal_overlap.all.txt
+        cat {input.all_by_all_files_r} > work/agg_reciprocal_overlap.all.txt
+        # plot it!
+        Scripts/plot_recip_and_slop.py {input.slop} work/agg_call_level_reciprocal_overlap.all.txt {output}
+        """
+
+rule plot_sizes:
+    input:
+        del_gatk='work/CallerSpecificCNVTypes/cnv_calls.DEL.GATK.bed',
+        dup_gatk='work/CallerSpecificCNVTypes/cnv_calls.DUP.GATK.bed',
+        del_cnvkit='work/CallerSpecificCNVTypes/cnv_calls.DEL.CNVkit.bed',
+        dup_cnvkit='work/CallerSpecificCNVTypes/cnv_calls.DUP.CNVkit.bed',
+        del_savvy='work/CallerSpecificCNVTypes/cnv_calls.DEL.Savvy.bed',
+        dup_savvy='work/CallerSpecificCNVTypes/cnv_calls.DUP.Savvy.bed'
+    output:
+        'Figures/size_distribution.png'
+    shell:
+        """
+        mkdir -p Figures/
+        # cat inputs into single caller specific input tmp files
+        cat {input.del_gatk} > work/CallerSpecificCNVTypes/tmp.GATK.bed
+        cat {input.dup_gatk} >> work/CallerSpecificCNVTypes/tmp.GATK.bed
+        cat {input.del_cnvkit} > work/CallerSpecificCNVTypes/tmp.CNVkit.bed
+        cat {input.dup_cnvkit} >> work/CallerSpecificCNVTypes/tmp.CNVkit.bed
+        cat {input.del_savvy} > work/CallerSpecificCNVTypes/tmp.Savvy.bed
+        cat {input.dup_savvy} >> work/CallerSpecificCNVTypes/tmp.Savvy.bed
+        # plot it!
+        python Scripts/plot_sizes.py -i work/CallerSpecificCNVTypes/tmp.GATK.bed \
+            -i work/CallerSpecificCNVTypes/tmp.Savvy.bed \
+            -i work/CallerSpecificCNVTypes/tmp.CNVkit.bed \
+            -l gCNV \
+            -l Savvy \
+            -l CNVkit \
+            -o {output}
+        """
+
+rule upsetplot:
+    input:
+        recip_del = 'work/VenDiagramResults/overlap_numbers.DEL.sample_specific.txt',
+        recip_dup = 'work/VenDiagramResults/overlap_numbers.DUP.sample_specific.txt',
+        slop_del = 'work/VenDiagramResultsBedPE/overlap_numbers.DEL.sample_specific.txt',
+        slop_dup = 'work/VenDiagramResultsBedPE/overlap_numbers.DUP.sample_specific.txt'
+    output:
+        recip_del='Figures/upsetplot.DEL.png',
+        recip_dup='Figures/upsetplot.DUP.png',
+        slop_del='Figures/upsetplot.slop.DEL.png',
+        slop_dup='Figures/upsetplot.slop.DUP.png'
+    shell:
+        """
+        python Scripts/upset_plot.py -i {input.recip_del} -l Deletion -o {output.recip_del}
+        python Scripts/upset_plot.py -i {input.recip_dup} -l Duplication -o {output.recip_dup}
+
+        python Scripts/upset_plot.py -i {input.slop_del} -l Deletion -o {output.slop_del}
+        python Scripts/upset_plot.py -i {input.slop_dup} -l Duplication -o {output.slop_dup}
+        """
+
+# ------------------------------ What % of calls in each venn category were validated by another calls ------------------------------ #
+
+rule get_percent_of_recip_calls_validated_by_sv:
+    input:
+        bed='work/RecipCategoriesBeds/{cnv_type}{end}.bed',
+        bedpe='work/RecipCategoriesBedPEs/{cnv_type}{end}.bed',
+        real_bed='work/SV_Validation/real_calls.{cnv_type}.bed'
+    output:
+        bed='work/ValidatedCallsByCategory/{cnv_type}{end}.bed.txt',
+        bedpe='work/ValidatedCallsByCategoryBedPE/{cnv_type}{end}.bed.txt'
+    shell:
+        """
+        mkdir -p work/ValidatedCallsByCategory
+        mkdir -p work/ValidatedCallsByCategoryBedPE
+        # make a list of sample specific savvy x CNVkit calls
+        bedtools intersect -a {input.real_bed} -b {input.bed} -f .9 -r -wb | python Scripts/make_sample_specific.py > {output.bed}
+        # unconvert from bedpe to bed
+        cat {input.bedpe} | awk '{{print $1"\t"$2+1"\t"$5+1"\t"$11"\t"$12"\t"$13}}' > {input.bedpe}.tmp
+        bedtools intersect -a {input.real_bed} -b {input.bedpe}.tmp -f .9 -r -wb  | python Scripts/make_sample_specific.py > {output.bedpe}
+        rm {input.bedpe}.tmp
+        """
+
+rule get_percent_of_recip_calls_validated_by_sv:
+    input:
+        bed='work/RecipCategoriesBeds/{cnv_type}-{end}.bed',
+        bedpe='work/RecipCategoriesBedPEs/{cnv_type}-{end}.bed',
+        real_bed='work/SV_Validation/real_calls.{cnv_type}.bed'
+    output:
+        bed='work/ValidatedCallsByCategory/{cnv_type}-{end}.bed.txt',
+        bedpe='work/ValidatedCallsByCategoryBedPE/{cnv_type}-{end}.bed.txt',
+        stats='work/ValidatedCallsByCategoryStats/{cnv_type}-{end}.stats'
+    shell:
+        """
+        mkdir -p work/ValidatedCallsByCategory
+        mkdir -p work/ValidatedCallsByCategoryBedPE
+        mkdir -p work/ValidatedCallsByCategoryStats
+
+        # make a list of sample specific savvy x CNVkit calls
+        bedtools intersect -a {input.real_bed} -b {input.bed} -f .9 -r -wb | python Scripts/make_sample_specific.py > {output.bed}
+        # unconvert from bedpe to bed
+        cat {input.bedpe} | awk '{{print $1"\t"$2+1"\t"$5+1"\t"$11"\t"$12"\t"$13}}' > {input.bedpe}.tmp
+        bedtools intersect -a {input.real_bed} -b {input.bedpe}.tmp -f .9 -r -wb  | python Scripts/make_sample_specific.py > {output.bedpe}
+        rm {input.bedpe}.tmp
+        # to a file write the number of lines in {input.bed}, {output.bed} the differences
+        python Scripts/calc_bed_difference_stats.py -a {input.bed} -b {output.bed} -l "bed.{wildcards.cnv_type}-{wildcards.end}"  > {output.stats}
+        python Scripts/calc_bed_difference_stats.py -a {input.bedpe} -b {output.bedpe} -l "bedpe.{wildcards.cnv_type}-{wildcards.end}"  >> {output.stats}
+        """
+
+rule agg_stats:
+    input:
+        expand('work/ValidatedCallsByCategoryStats/{cnv_type}-{end}.stats',cnv_type=CNV_TYPES,end=ENDS)
+    output:
+        'work/ValidatedCallsByCategoryStats/agg_stats.txt'
+    shell:
+        """
+        cat {input} > {output}
+        """
+
+"""
+Savvy: 18423
+CNVKit: 3286
+GATK: 15196
+Savvy-GATK: 757
+Savvy-CNVKit: 133
+CNVKit-GATK: 22
+Triple: 18
+"""
+
+rule agg_stats_for_upset_plot:
+    input:
+        'work/ValidatedCallsByCategoryStats/agg_stats.txt'
+    output:
+        'work/ValidatedCallsByCategoryStats/for_upset_{ol_type}.{cnv_type}.txt'
+    params:
+        ol_type = lambda wildcards, output: output[0].split('.')[0].split('_')[-1],
+        call_type=lambda wildcards, output: output[0].split('.')[1].replace('.txt','')
+    run:
+        with open(output[0],'w') as outfile:
+            for line in open(input[0]):
+                if params.ol_type + '.' in line and params.call_type in line:
+                    row = line.strip().split('\t')
+                    group = row[0].split('-')[-1].replace('savvy','Savvy').replace('gatk','GATK').replace('cnvkit','CNVKit').replace('triple','Triple').replace('_','-') + ': '
+                    percent = row[-1]
+                    diff = str(int(row[1]) - int(row[2]))
+                    outfile.write(group + percent + '\n')
+
+rule tabulate_agg_stats:
+    input:
+        'work/ValidatedCallsByCategoryStats/agg_stats.txt'
+    output:
+        'work/ValidatedCallsByCategoryStats/tabulated_validation_percents_{ol_type}.{cnv_type}.tsv'
+    params:
+        ol_type = lambda wildcards, output: output[0].split('.')[0].split('_')[-1],
+        call_type=lambda wildcards, output: output[0].split('.')[1].replace('.txt','')
+    run:
+        with open(output[0],'w') as outfile:
+            for line in open(input[0]):
+                if params.ol_type + '.' in line and params.call_type in line:
+                    row = line.strip().split('\t')
+                    group = row[0].split('-')[-1].replace('savvy','Savvy').replace('gatk','GATK').replace('cnvkit','CNVKit').replace('triple','Triple').replace('_','-') + '\t'
+                    percent = row[-1]
+                    diff = str(int(row[1]) - int(row[2]))
+                    outfile.write(group + row[1] + '\t' + percent + '\n')
+
+rule upset_plot_percent_of_calls_validated_by_sv:
+    input:
+        'work/ValidatedCallsByCategoryStats/for_upset_{ol_type}.{cnv_type}.txt' 
+    output:
+        'Figures/upsetplot_sv_validation_{ol_type}.{cnv_type}.png'
+    params: 
+        label = lambda wildcards, output: wildcards.ol_type.replace('bedpe','Breakpoint').replace('bed','Reciprocal') + ' ' + wildcards.cnv_type.replace('DEL',' Deletions').replace('DUP',' Duplications')
+    shell:
+        """
+        python Scripts/upset_plot.py -i {input} -l "{params.label}" -o {output} --logscale 0
+        """
+
+rule plot_venn_diagrams:
+    input:
+        'work/ValidatedCallsByCategoryStats/tabulated_validation_percents_{ol_type}.{cnv_type}.tsv'
+    output:
+        'Figures/venn_diagram_{ol_type}.{cnv_type}.png'
+    shell:
+        """
+        python Scripts/plot_venn_diagram.py -i {input} -o {output}
         """
