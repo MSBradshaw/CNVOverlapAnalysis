@@ -5,5 +5,5 @@ seen = set()
 for line in sys.stdin:
     line = line.strip()
     row = line.split('\t')
-    if row[4] == row[10]:
+    if row[3] == row[9]:
         print(line)

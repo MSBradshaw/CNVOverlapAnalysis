@@ -1127,3 +1127,14 @@ rule plot_venn_diagrams:
         """
         python Scripts/plot_venn_diagram.py -i {input} -o {output}
         """
+    
+rule plot_calls_per_sample:
+    input:
+        dels='work/CNVTypes/cnv_calls.DEL.bed',
+        dups='work/CNVTypes/cnv_calls.DUP.bed'
+    output:
+        'Figures/calls_per_sample.png'
+    shell:
+        """
+        python Scripts/plot_calls_per_sample.py --dels {input.dels} --dups {input.dups} -o {output}
+        """
