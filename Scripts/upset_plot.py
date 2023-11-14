@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument('-l', '--labels', action='append', required=True, help='Labels for input file(s)')
     parser.add_argument('-o', '--outputs', action='append', required=True, help='Output file(s)')
     parser.add_argument('--logscale', default=1, help='Should log scale be used 0 or 1', type=int)
+    parser.add_argument('--percent', default=False, help='Use floats instead of ints', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -33,9 +34,9 @@ def load_data(input_file):
     assert 'Savvy' in data.keys(), 'Savvy not in input file'
     assert 'CNVKit' in data.keys(), 'CNVKit not in input file'
     assert 'GATK' in data.keys(), 'GATK not in input file'
-    assert 'Savvy-GATK' in data.keys(), 'Savvy-GATK not in input file'
-    assert 'Savvy-CNVKit' in data.keys(), 'Savvy-CNVKit not in input file'
-    assert 'CNVKit-GATK' in data.keys(), 'CNVKit-GATK not in input file'
+    assert 'Savvy-GATK' in data.keys() or 'GATK-Savvy' in data.keys() , 'Savvy-GATK not in input file'
+    assert 'Savvy-CNVKit' in data.keys() or 'CNVKit-Savvy' in data.keys(), 'Savvy-CNVKit not in input file'
+    assert 'CNVKit-GATK' in data.keys() or 'GATK-CNVKit' in data.keys(), 'CNVKit-GATK not in input file'
     assert 'Triple' in data.keys(), 'Triple not in input file'
     return data
 
@@ -43,13 +44,20 @@ def main():
     args = get_args()
     for file,label,output in zip(args.inputs, args.labels, args.outputs):
         data = load_data(file)
-        key_order = ['Savvy', 'CNVKit', 'GATK', 'Savvy-GATK', 'Savvy-CNVKit', 'CNVKit-GATK', 'Triple']
+
+        # if 'Savvy-GATK' is in keys sg = 'Savvy-GATK' else sg = 'GATK-Savvy' as ternal operator
+        sg = 'Savvy-GATK' if 'Savvy-GATK' in data.keys() else 'GATK-Savvy'
+        sc = 'Savvy-CNVKit' if 'Savvy-CNVKit' in data.keys() else 'CNVKit-Savvy'
+        cg = 'CNVKit-GATK' if 'CNVKit-GATK' in data.keys() else 'GATK-CNVKit'
+        
+        key_order = ['Savvy', 'CNVKit', 'GATK', sg, sc, cg, 'Triple']
         groupings = [['Savvy'],['CNVkit'],['gCNV'],['Savvy','gCNV'],['Savvy','CNVkit'],['CNVkit','gCNV'],['Savvy','CNVkit','gCNV']]
         upset_data = [ data[k] for k in key_order]
         upset = from_memberships(groupings, upset_data)
-        plt.rcParams.update({'font.size': 7})
-        plot(upset, show_counts=True)
-        plot(upset)
+        plt.rcParams.update({'font.size': 6})
+        counts = not args.percent
+        plot(upset, show_counts=counts)
+        # change the font size of the text annotations
         plt.suptitle(label)
         print('saving to {}'.format(output))
         

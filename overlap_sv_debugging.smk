@@ -9,8 +9,14 @@ rule all:
         'debugwork/double_stats.txt',
         'debugwork/single_stats.txt',
         'debugwork/triple_overlaps.DEL.validated.bed',
-        'debugwork/triple_overlaps.DUP.validated.bed'
-        
+        'debugwork/triple_overlaps.DUP.validated.bed',
+        'debugwork/upset_plot.DEL.png',
+        'debugwork/upset_plot.DUP.png',
+        'debugwork/validated_overlap_stats.txt',
+        'debugwork/validated_upset_plot.DEL.png',
+        'debugwork/validated_upset_plot.DUP.png',
+        'debugwork/validated_percent_upset_plot.DEL.png',
+        'debugwork/validated_percent_upset_plot.DUP.png'
 
 rule sort:
     input:
@@ -98,7 +104,7 @@ rule overlap_singles_and_sv:
         'debugwork/single_overlaps_and_sv.bed'
     shell:
         """
-        bedtools intersect -a {input.cnv_calls_sorted} -b {input.SV_calls_sorted} -wao -f .9 | cut -f 1-12 | python Scripts/make_sample_specific.py | python Scripts/make_type_specific.py tmp.bed | cut -f1,2,3,4,5,6 | sort | uniq > {output}
+        bedtools intersect -a {input.cnv_calls_sorted} -b {input.SV_calls_sorted} -wao -f .9 | cut -f 1-12 | python Scripts/make_sample_specific.py | python Scripts/make_type_specific.py | cut -f1,2,3,4,5,6 | sort | uniq > {output}
         """
 
 rule generate_stats_about_single_overlaps:
@@ -141,7 +147,9 @@ rule triple_overlap:
 
     output:
         'debugwork/triple_overlaps.DEL.validated.bed',
-        'debugwork/triple_overlaps.DUP.validated.bed'
+        'debugwork/triple_overlaps.DUP.validated.bed',
+        'debugwork/triple_overlaps.DUP.bed',
+        'debugwork/triple_overlaps.DEL.bed',
     shell:
         """
             grep GATK debugwork/all_calls.sorted.bed > debugwork/all_calls.GATK.sorted.bed
@@ -169,4 +177,129 @@ rule triple_overlap:
             # intersect triples with real calls
             bedtools intersect -a debugwork/triple_overlaps.DEL.bed -b {input.validated_cnvs} -wao -f .99 -r | cut -f 1-12 | python Scripts/make_sample_specific.py | python Scripts/make_caller_specific.py | cut -f 1-6 | sort | uniq > debugwork/triple_overlaps.DEL.validated.bed
             bedtools intersect -a debugwork/triple_overlaps.DUP.bed -b {input.validated_cnvs} -wao -f .99 -r | cut -f 1-12 | python Scripts/make_sample_specific.py | python Scripts/make_caller_specific.py | cut -f 1-6 | sort | uniq > debugwork/triple_overlaps.DUP.validated.bed
+        """
+
+
+rule generate_stats_about_overlaps:
+    input:
+        all_overlaps = 'debugwork/all_calls.sorted.bed',
+        doubles = 'debugwork/double_overlaps.bed.txt',
+        triples_del = 'debugwork/triple_overlaps.DEL.bed',
+        triples_dup = 'debugwork/triple_overlaps.DUP.bed'
+    output:
+        stats = 'debugwork/overlap_stats.txt'
+    shell:
+        """
+        # remove doubles that overlap a DEL and a DUP
+        grep -v 'DUP' {input.doubles} > debugwork/double_overlaps.DEL.bed
+        grep -v 'DEL' {input.doubles} > debugwork/double_overlaps.DUP.bed
+        cat debugwork/double_overlaps.DEL.bed > debugwork/double_overlaps.type_specific.bed
+        cat debugwork/double_overlaps.DUP.bed >> debugwork/double_overlaps.type_specific.bed
+
+        # combine triples
+        cat {input.triples_del} > debugwork/triple_overlaps.type_specific.bed
+        cat {input.triples_dup} >> debugwork/triple_overlaps.type_specific.bed
+
+        python Scripts/generate_stats.py --singles {input.all_overlaps} --double debugwork/double_overlaps.type_specific.bed --triples debugwork/triple_overlaps.type_specific.bed --output {output.stats}
+        """
+
+rule upset_plots:
+    input:
+        stats = 'debugwork/overlap_stats.txt'
+    output:
+        upset_plot_del = 'debugwork/upset_plot.DEL.png',
+        upset_plot_dup = 'debugwork/upset_plot.DUP.png'
+    shell:
+        """
+        # replace CNVkit with CNVKit in stats file
+        sed -i 's/CNVkit/CNVKit/g' {input.stats}
+
+        grep DEL {input.stats} | cut -f2 > debugwork/DEL.stats.txt
+        python Scripts/upset_plot.py -i debugwork/DEL.stats.txt -l Deletion -o {output.upset_plot_del}
+        grep DUP {input.stats} | cut -f2 > debugwork/DUP.stats.txt
+        python Scripts/upset_plot.py -i debugwork/DUP.stats.txt -l Duplication -o {output.upset_plot_dup}
+        """
+
+rule generate_stats_about_validated_overlaps:
+    input:
+        real_calls= 'debugwork/single_overlaps_and_sv.bed',
+
+        triples_del = 'debugwork/triple_overlaps.DEL.validated.bed',
+        triples_dup = 'debugwork/triple_overlaps.DUP.validated.bed'
+    output:
+        stats = 'debugwork/validated_overlap_stats.txt'
+    shell:
+        """
+        # get the double overlap real calls
+        bedtools intersect -a {input.real_calls} -b {input.real_calls} -wao -f .6 -r | cut -f 1-12 | python Scripts/make_sample_specific.py | python Scripts/make_type_specific.py > debugwork/validated_double_overlaps.bed.txt
+
+
+        
+        # remove doubles that overlap a DEL and a DUP
+        grep -v 'DUP' debugwork/validated_double_overlaps.bed.txt > debugwork/validated_double_overlaps.DEL.bed
+        grep -v 'DEL' debugwork/validated_double_overlaps.bed.txt > debugwork/validated_double_overlaps.DUP.bed
+        cat debugwork/validated_double_overlaps.DEL.bed > debugwork/validated_double_overlaps.type_specific.bed
+        cat debugwork/validated_double_overlaps.DUP.bed >> debugwork/validated_double_overlaps.type_specific.bed
+
+        # combine triples
+        cat {input.triples_del} > debugwork/validated_triple_overlaps.type_specific.bed
+        cat {input.triples_dup} >> debugwork/validated_triple_overlaps.type_specific.bed
+
+        python Scripts/generate_stats.py --singles {input.real_calls} --double debugwork/validated_double_overlaps.type_specific.bed --triples debugwork/triple_overlaps.type_specific.bed --output {output.stats}
+        """
+
+rule calc_stats_as_portions:
+    input:
+        stats = 'debugwork/overlap_stats.txt',
+        valid_stats = 'debugwork/validated_overlap_stats.txt'
+    output:
+        stats = 'debugwork/validated_percent_overlap_stats.txt'
+    run:
+        # load stats as a dict, split on ': '
+        stats = {}
+        for line in open(input.stats):
+            line = line.strip().split(': ')
+            stats[line[0]] = float(line[1])
+        # load valid stats in the same way
+        valid_stats = {}
+        for line in open(input.valid_stats):
+            line = line.strip().split(': ')
+            valid_stats[line[0]] = float(line[1])
+        # divide each valid stat by the stat
+        with open(output[0],'w') as out:
+            for key in stats:
+                out.write(key+': '+str(valid_stats[key]/stats[key])+'\n')
+
+rule upset_plots_valdiated:
+    input:
+        stats = 'debugwork/validated_overlap_stats.txt'
+    output:
+        upset_plot_del = 'debugwork/validated_upset_plot.DEL.png',
+        upset_plot_dup = 'debugwork/validated_upset_plot.DUP.png'
+    shell:
+        """
+        # replace CNVkit with CNVKit in stats file
+        sed -i 's/CNVkit/CNVKit/g' {input.stats}
+
+        grep DEL {input.stats} | cut -f2 > debugwork/DEL.stats.txt
+        python Scripts/upset_plot.py -i debugwork/DEL.stats.txt -l Deletion -o {output.upset_plot_del}
+        grep DUP {input.stats} | cut -f2 > debugwork/DUP.stats.txt
+        python Scripts/upset_plot.py -i debugwork/DUP.stats.txt -l Duplication -o {output.upset_plot_dup}
+        """
+
+rule upset_plots_valdiated_percents:
+    input:
+        stats = 'debugwork/validated_percent_overlap_stats.txt'
+    output:
+        upset_plot_del = 'debugwork/validated_percent_upset_plot.DEL.png',
+        upset_plot_dup = 'debugwork/validated_percent_upset_plot.DUP.png'
+    shell:
+        """
+        # replace CNVkit with CNVKit in stats file
+        sed -i 's/CNVkit/CNVKit/g' {input.stats}
+
+        grep DEL {input.stats} | cut -f2 > debugwork/DEL.stats.txt
+        python Scripts/upset_plot.py -i debugwork/DEL.stats.txt -l Deletion -o {output.upset_plot_del} --logscale 0 --percent
+        grep DUP {input.stats} | cut -f2 > debugwork/DUP.stats.txt
+        python Scripts/upset_plot.py -i debugwork/DUP.stats.txt -l Duplication -o {output.upset_plot_dup} --logscale 0 --percent
         """

@@ -22,6 +22,16 @@ def main():
     # grouping by caller and call_type plot the number of callers per sample as a violin plot
     dels = load_bed_file(args.dels)
     dups = load_bed_file(args.dups)
+
+    # calc the average number of calls per sample
+    print('Average number of calls per sample')
+    for caller in dels['caller'].unique():
+        sub = dels[dels['caller'] == caller]
+        print('Deletion', caller, 'average=',sub.shape[0]/len(sub['sample'].unique()))
+    for caller in dups['caller'].unique():
+        sub = dups[dups['caller'] == caller]
+        print('Duplication', caller, 'average=',sub.shape[0]/len(sub['sample'].unique()))
+
     x_labels = []
     for i,caller in enumerate(dels['caller'].unique()):
         x_labels.append(caller.replace('GATK Cohort Mode','gCNV'))

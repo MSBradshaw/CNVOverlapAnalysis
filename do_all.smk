@@ -1137,4 +1137,5 @@ rule plot_calls_per_sample:
     shell:
         """
         python Scripts/plot_calls_per_sample.py --dels {input.dels} --dups {input.dups} -o {output}
+        python Scripts/plot_calls_per_sample.py --dels work/CNVTypes/cnv_calls.DEL.bed --dups work/CNVTypes/cnv_calls.DUP.bed --output Figures/calls_per_sample.png
         """
