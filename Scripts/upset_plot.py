@@ -56,7 +56,10 @@ def main():
         upset = from_memberships(groupings, upset_data)
         plt.rcParams.update({'font.size': 6})
         counts = not args.percent
-        plot(upset, show_counts=counts)
+        plot(upset, show_counts=counts, sort_by='cardinality', sort_categories_by=None)
+        # fix the y scale from 0 -1
+        if args.percent:
+            plt.ylim(0,1)
         # change the font size of the text annotations
         plt.suptitle(label)
         print('saving to {}'.format(output))
