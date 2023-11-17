@@ -8,9 +8,10 @@ rule all:
         'debugworkchco/double_overlaps.bed.txt',
         'debugworkchco/overlap_stats.txt',
         'debugworkchco/upset_plot.DEL.png',
-        'debugworkchco/upset_plot.DUP.png'
+        'debugworkchco/upset_plot.DUP.png',
+        'CHCOFigures/chco_size_distribution.png',
+        'CHCOFigures/chco_calls_per_sample.png'
         
-
 rule sort:
     input:
         cnv_calls = cnv_calls
@@ -153,4 +154,39 @@ rule upset_plots:
         python Scripts/upset_plot.py -i debugworkchco/DEL.stats.txt -l Deletion -o {output.upset_plot_del}
         grep DUP {input.stats} | cut -f2 > debugworkchco/DUP.stats.txt
         python Scripts/upset_plot.py -i debugworkchco/DUP.stats.txt -l Duplication -o {output.upset_plot_dup}
+        """
+
+rule plot_sizes:
+    input:
+        all_calls=cnv_calls
+    output:
+        size='CHCOFigures/chco_size_distribution.png',
+        calls='CHCOFigures/chco_calls_per_sample.png'
+    shell:
+        """
+        mkdir -p workchco/CallerSpecificCNVTypes
+        mkdir -p Figures/
+        # cat inputs into single caller specific input tmp files
+        grep 'GATK' {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.GATK.bed
+        grep 'CNVkit' {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.CNVkit.bed
+        grep 'Savvy' {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.Savvy.bed
+
+        python Scripts/plot_sizes.py -i workchco/CallerSpecificCNVTypes/tmp.GATK.bed \
+            -i workchco/CallerSpecificCNVTypes/tmp.Savvy.bed \
+            -i workchco/CallerSpecificCNVTypes/tmp.CNVkit.bed \
+            -l gCNV \
+            -l Savvy \
+            -l CNVkit \
+            -o {output.size}
+
+
+        # cat all dels into one file
+        grep DEL {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.DEL.bed
+        grep DUP {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.DUP.bed
+
+        # replace GATK with gCNV in workchco/CallerSpecificCNVTypes/tmp.DEL.bed  and workchco/CallerSpecificCNVTypes/tmp.DUP.bed 
+        sed -i 's/GATK/gCNV/g' workchco/CallerSpecificCNVTypes/tmp.DEL.bed
+        sed -i 's/GATK/gCNV/g' workchco/CallerSpecificCNVTypes/tmp.DUP.bed
+
+        python Scripts/plot_calls_per_sample.py --dels workchco/CallerSpecificCNVTypes/tmp.DEL.bed --dups workchco/CallerSpecificCNVTypes/tmp.DUP.bed --output {output.calls}
         """

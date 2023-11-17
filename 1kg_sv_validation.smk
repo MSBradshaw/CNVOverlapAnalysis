@@ -24,7 +24,9 @@ rule all:
         f'{outputdir}/validated_upset_plot.DEL.png',
         f'{outputdir}/validated_upset_plot.DUP.png',
         f'{outputdir}/validated_percent_upset_plot.DEL.png',
-        f'{outputdir}/validated_percent_upset_plot.DUP.png'
+        f'{outputdir}/validated_percent_upset_plot.DUP.png',
+        f'{outputdir}/1kg_size_distribution.png',
+        f'{outputdir}/1kg_calls_per_sample.png'
 
 rule sort:
     input:
@@ -342,4 +344,35 @@ rule upset_plots_valdiated_percents:
         python Scripts/upset_plot.py -i {params.outdir}/DEL.stats.percent.txt -l 'Deletion {params.percent}' -o {output.upset_plot_del} --logscale 0 --percent
         grep DUP {input.stats} | cut -f2 > {params.outdir}/DUP.stats.percent.txt
         python Scripts/upset_plot.py -i {params.outdir}/DUP.stats.percent.txt -l 'Duplication {params.percent}' -o {output.upset_plot_dup} --logscale 0 --percent
+        """
+
+rule plot_sizes:
+    input:
+        all_calls=cnv_calls
+    output:
+        size=f'{outputdir}/1kg_size_distribution.png',
+        calls=f'{outputdir}/1kg_calls_per_sample.png'
+    shell:
+        """
+        mkdir -p CallerSpecificCNVTypes
+        mkdir -p Figures/
+        # cat inputs into single caller specific input tmp files
+        grep 'GATK' {input.all_calls} > work/CallerSpecificCNVTypes/tmp.GATK.bed
+        grep 'CNVkit' {input.all_calls} > work/CallerSpecificCNVTypes/tmp.CNVkit.bed
+        grep 'Savvy' {input.all_calls} > work/CallerSpecificCNVTypes/tmp.Savvy.bed
+
+        # plot it!
+        python Scripts/plot_sizes.py -i work/CallerSpecificCNVTypes/tmp.GATK.bed \
+            -i work/CallerSpecificCNVTypes/tmp.Savvy.bed \
+            -i work/CallerSpecificCNVTypes/tmp.CNVkit.bed \
+            -l gCNV \
+            -l Savvy \
+            -l CNVkit \
+            -o {output.size}
+        
+        # cat all dels into one file
+        grep DEL {input.all_calls} > work/CallerSpecificCNVTypes/tmp.DEL.bed
+        grep DUP {input.all_calls} > work/CallerSpecificCNVTypes/tmp.DUP.bed
+
+        python Scripts/plot_calls_per_sample.py --dels work/CallerSpecificCNVTypes/tmp.DEL.bed --dups work/CallerSpecificCNVTypes/tmp.DUP.bed --output {output.calls}
         """

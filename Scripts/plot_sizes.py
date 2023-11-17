@@ -41,7 +41,7 @@ def main():
     for i,bed_file,label in zip(list(range(num_inputs)),args.input, args.labels):
         del_sizes, dup_sizes = get_sizes(bed_file)
         ax[0,i].hist(del_sizes, bins=100, color=colors[i])
-        ax[1,i].hist(del_sizes, bins=100, color=colors[i])
+        ax[1,i].hist(dup_sizes, bins=100, color=colors[i])
         ax[0,i].set_title(chr(i + 65), loc='left')
         ax[0,i].set_title(label + ' DEL\nn={}'.format(str(len(del_sizes))), loc='center')
         ax[1,i].set_title(chr(i + 65 + num_inputs), loc='left')
