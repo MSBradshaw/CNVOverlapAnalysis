@@ -9,8 +9,7 @@ rule all:
         'workchco/overlap_stats.txt',
         'workchco/upset_plot.DEL.png',
         'workchco/upset_plot.DUP.png',
-        'Figures/chco_size_distribution.png',
-        'Figures/chco_calls_per_sample.png'
+        'Figures/chco_calls_per_sample_and_sizes.png'
         
 rule sort:
     input:
@@ -160,8 +159,7 @@ rule plot_sizes:
     input:
         all_calls=cnv_calls
     output:
-        size='Figures/chco_size_distribution.png',
-        calls='Figures/chco_calls_per_sample.png'
+        calls='Figures/chco_calls_per_sample_and_sizes.png'
     shell:
         """
         mkdir -p workchco/CallerSpecificCNVTypes
@@ -171,15 +169,6 @@ rule plot_sizes:
         grep 'CNVkit' {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.CNVkit.bed
         grep 'Savvy' {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.Savvy.bed
 
-        python Scripts/plot_sizes.py -i workchco/CallerSpecificCNVTypes/tmp.GATK.bed \
-            -i workchco/CallerSpecificCNVTypes/tmp.Savvy.bed \
-            -i workchco/CallerSpecificCNVTypes/tmp.CNVkit.bed \
-            -l gCNV \
-            -l Savvy \
-            -l CNVkit \
-            -o {output.size}
-
-
         # cat all dels into one file
         grep DEL {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.DEL.bed
         grep DUP {input.all_calls} > workchco/CallerSpecificCNVTypes/tmp.DUP.bed
@@ -188,5 +177,5 @@ rule plot_sizes:
         sed -i 's/GATK/gCNV/g' workchco/CallerSpecificCNVTypes/tmp.DEL.bed
         sed -i 's/GATK/gCNV/g' workchco/CallerSpecificCNVTypes/tmp.DUP.bed
 
-        python Scripts/plot_calls_per_sample.py --dels workchco/CallerSpecificCNVTypes/tmp.DEL.bed --dups workchco/CallerSpecificCNVTypes/tmp.DUP.bed --output {output.calls}
+        python Scripts/plot_sizes_and_calls_per_sample.py --dels workchco/CallerSpecificCNVTypes/tmp.DEL.bed --dups workchco/CallerSpecificCNVTypes/tmp.DUP.bed --output {output.calls}
         """
